@@ -979,6 +979,11 @@ function nowUnixBig() {
 // non capita mai di riusarlo per due chiavi diverse nella stessa esecuzione.
 // -----------------------------------------------------------------------
 
+// L'ultimo seme consumato, per accorgersi se ne arriva due volte lo stesso.
+// Vive quanto l'esecuzione: non va persistito, non e' un segreto da conservare
+// ed e' l'unico posto in cui serve.
+let ultimoSeme = null;
+
 async function freshEntropy32() {
   const wv = new WebView();
   await wv.loadHTML("<html></html>");
@@ -986,7 +991,55 @@ async function freshEntropy32() {
     "JSON.stringify(Array.from(crypto.getRandomValues(new Uint8Array(32))))",
     false
   );
-  return new Uint8Array(JSON.parse(json));
+  const bytes = new Uint8Array(JSON.parse(json));
+  controllaSeme(bytes);
+  ultimoSeme = bytes;
+  return bytes;
+}
+
+/**
+ * I tre controlli sul seme. Solleva se non va, non ritorna niente.
+ *
+ * Funzione a se' e **sincrona** di proposito: cosi' si puo' eseguire davvero
+ * in un motore JS qualunque, senza WebView e senza iOS. Dentro
+ * `freshEntropy32` sarebbe stata solo rileggibile.
+ *
+ * ## Perche' esistono
+ *
+ * Questo ponte e' l'unico pezzo del sistema che dipende dal comportamento di
+ * WKWebView, ed e' stato visto funzionare **una volta sola**, su un iPhone in
+ * prestito. Se un giorno si rompesse, si romperebbe in silenzio: il seme
+ * arriverebbe comunque, l'operazione riuscirebbe, e i messaggi sarebbero
+ * cifrati male senza che niente lo dica.
+ *
+ * Il modo peggiore di rompersi e' anche il piu' banale: una WebView che
+ * restituisce un valore **gia' visto**, per una cache o per una risposta non
+ * rivalutata. Il seme viene scartato dopo un solo uso apposta, quindi due
+ * operazioni con lo stesso seme significano stessa chiave effimera e stesso
+ * nonce — cioe' riuso di keystream, l'unica cosa che il documento del core
+ * dice di non far succedere mai (vedi «Conseguenza operativa del segreto
+ * statico»).
+ *
+ * Meglio fermarsi con un errore leggibile che cifrare con entropia finta.
+ */
+function controllaSeme(bytes) {
+  if (bytes.length !== 32) {
+    throw new Error(
+      "Entropia: ricevuti " + bytes.length + " byte invece di 32. " +
+      "Il ponte con la WebView non funziona: non si cifra."
+    );
+  }
+  if (bytes.every((b) => b === bytes[0])) {
+    throw new Error(
+      "Entropia: 32 byte tutti uguali. Non e' caso, e' un ponte rotto: non si cifra."
+    );
+  }
+  if (ultimoSeme !== null && bytes.every((b, i) => b === ultimoSeme[i])) {
+    throw new Error(
+      "Entropia: lo stesso seme di prima. La WebView sta restituendo un valore " +
+      "vecchio, e cifrare adesso riuserebbe chiave e nonce: non si cifra."
+    );
+  }
 }
 
 async function seedRng() {
