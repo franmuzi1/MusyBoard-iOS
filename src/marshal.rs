@@ -30,6 +30,7 @@
 //! importato che non e' una identity card, nessuna sessione attiva, testo non
 //! UTF-8).
 
+use zeroize::Zeroize;
 use keyboard_cipher_core::error::Error;
 
 pub const ERR_RNG_NOT_SEEDED: u32 = 90;
@@ -85,7 +86,33 @@ pub unsafe fn dealloc(ptr: u32, len: u32) {
     // vere in questo punto preciso.
     unsafe {
         let slice_ptr: *mut [u8] = std::ptr::slice_from_raw_parts_mut(ptr as *mut u8, len as usize);
-        drop(Box::from_raw(slice_ptr));
+        let mut boxed = Box::from_raw(slice_ptr);
+        // ## Si azzera prima di liberare, e vale per TUTTO
+        //
+        // Da questo ponte passa di tutto: il chiaro dei messaggi, le
+        // passphrase, e i 32 byte del segreto d'identita' che escono da
+        // `mb_import_backup`. Liberare senza sovrascrivere li lasciava nella
+        // memoria lineare del modulo finche' qualcos'altro non ci scriveva
+        // sopra — e in un modulo wasm quella memoria non torna al sistema
+        // operativo: resta li', dentro il processo, per tutta la durata dello
+        // script.
+        //
+        // E' la stessa disciplina che il lato Android applica ovunque
+        // (`Zeroizing` nel core, `read_secret_bytes` nel ponte JNI,
+        // `svuotaSovrascrivendo` sul buffer della riga). Qui si fermava al
+        // confine, e il confine e' proprio il punto in cui i segreti si
+        // materializzano in chiaro per essere consegnati a JavaScript.
+        //
+        // Si fa in UN posto — qui — invece che su ogni chiamante: e' l'unica
+        // strada che ogni buffer percorre, quindi e' anche l'unica in cui la
+        // regola non si puo' dimenticare. Il costo e' una scrittura di
+        // qualche decina di byte per chiamata.
+        //
+        // `zeroize` e non `fill(0)`: e' una scrittura che il compilatore non
+        // ha il permesso di eliminare, ed e' esattamente il motivo per cui il
+        // crate esiste.
+        boxed.zeroize();
+        drop(boxed);
     }
 }
 
