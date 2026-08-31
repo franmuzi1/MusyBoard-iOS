@@ -44,6 +44,36 @@ Il binario esce in `target/wasm32-unknown-unknown/release/musyboard_wasm.wasm`,
 ~289 KB, con **zero import**: non chiede niente all'host, quindi
 `WebAssembly.instantiate(bytes, {})` basta.
 
+## La chiave privata sta in chiaro nel file, e va saputo
+
+Su Android il segreto d'identita' e' avvolto da Android Keystore — `StrongBox`
+dove c'e', `setUnlockedDeviceRequired`, in una cartella esclusa dai backup — e
+quel che finisce su disco e' inservibile fuori da quel telefono.
+
+Qui no. Sta in `config.json`, in Base64, in chiaro:
+
+```json
+{ "my_identity": { "secret_b64": "..." } }
+```
+
+**Cosa protegge comunque:** il file vive nella sandbox di Scriptable, quindi
+nessun'altra app lo legge; e' in `FileManager.local()`, quindi **non**
+sincronizza con iCloud Drive; e iOS lo cifra a riposo con il codice del
+dispositivo, quindi un iPhone spento e bloccato non lo consegna.
+
+**Cosa non protegge, ed e' la differenza che conta:** un **backup del
+dispositivo** — iCloud o computer — contiene la chiave privata cosi' com'e'.
+Su Android lo stesso backup conterrebbe un blob che senza quel telefono non
+apre niente. Chi ottiene un backup di un iPhone ottiene l'identita'.
+
+Non e' aggirabile da qui: Scriptable non espone nessun modo per escludere un
+file dai backup, e non c'e' un equivalente del Keystore accessibile da uno
+script. Si potrebbe cifrare `config.json` con una passphrase — il crate ha gia'
+Argon2id per i backup — ma significherebbe chiederla a ogni uso, ed e' una
+scelta di prodotto, non una svista da correggere di nascosto.
+
+Finche' resta cosi': **un iPhone vale quanto il suo backup.**
+
 ## Stato
 
 Tutto costruito e verificato **senza un iPhone**: test Rust sul target host,

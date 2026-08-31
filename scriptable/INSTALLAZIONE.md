@@ -11,6 +11,18 @@ Nella cartella **locale** di Scriptable (`Su iPhone → Scriptable` nell'app Fil
 **mai** `iCloud Drive → Scriptable`, altrimenti la chiave privata sincronizza
 sui server Apple):
 
+> **La chiave privata sta in chiaro dentro `config.json`.**
+>
+> Nella sandbox di Scriptable, quindi nessun'altra app la legge, e iOS cifra il
+> file a riposo con il codice del telefono. Ma un **backup del dispositivo** —
+> iCloud o computer — se la porta via cosi' com'e'. Su Android non sarebbe
+> possibile: li' la chiave e' chiusa nel Keystore e fuori da quel telefono non
+> apre niente.
+>
+> Non e' aggirabile: Scriptable non permette di escludere un file dai backup.
+> Vale la pena saperlo prima di usarla per qualcosa di serio.
+
+
 - `MusyBoard.js` (questo repo, `wasm/scriptable/MusyBoard.js`)
 - `musyboard_wasm.wasm` — compilato con:
   ```
