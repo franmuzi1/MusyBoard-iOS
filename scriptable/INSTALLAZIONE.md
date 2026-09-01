@@ -22,6 +22,11 @@ sui server Apple):
 > Non e' aggirabile: Scriptable non permette di escludere un file dai backup.
 > Vale la pena saperlo prima di usarla per qualcosa di serio.
 
+Lo script salva lo stato in modo recuperabile: durante un aggiornamento possono
+comparire temporaneamente `config.json.new` e `config.json.bak`. **Non
+cancellarli manualmente**: al riavvio lo script sceglie automaticamente la
+copia valida piu' recente se un salvataggio era stato interrotto.
+
 
 - `MusyBoard.js` (questo repo, `wasm/scriptable/MusyBoard.js`)
 - `musyboard_wasm.wasm` — compilato con:

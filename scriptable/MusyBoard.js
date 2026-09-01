@@ -32,12 +32,19 @@
 // toccano il filesystem.
 let files = null;
 let CONFIG_PATH = null;
+let CONFIG_TMP_PATH = null;
+let CONFIG_BACKUP_PATH = null;
 let WASM_PATH = null;
 
 function ensurePaths() {
   if (files) return;
   files = FileManager.local();
   CONFIG_PATH = files.joinPath(files.documentsDirectory(), "config.json");
+  // Non si scrive mai direttamente sopra lo stato attivo: contiene le
+  // catene crittografiche, quindi una scrittura interrotta non deve poterlo
+  // trasformare in JSON troncato e far perdere l'identita'.
+  CONFIG_TMP_PATH = files.joinPath(files.documentsDirectory(), "config.json.new");
+  CONFIG_BACKUP_PATH = files.joinPath(files.documentsDirectory(), "config.json.bak");
   WASM_PATH = files.joinPath(files.documentsDirectory(), "musyboard_wasm.wasm");
 }
 
@@ -1060,13 +1067,37 @@ let currentSettings = { app_package_constant: "ios-scriptable", effimero_default
 
 function loadConfigFile() {
   ensurePaths();
-  if (!files.fileExists(CONFIG_PATH)) return null;
-  return JSON.parse(files.readString(CONFIG_PATH));
+  // `.new` esiste soltanto dopo la scrittura e rilettura completa del nuovo
+  // stato: dopo un crash prima dello spostamento e' quindi quello piu' recente.
+  // `.bak` copre il crash dopo aver spostato il vecchio file ma prima di
+  // installare il nuovo.
+  for (const path of [CONFIG_TMP_PATH, CONFIG_PATH, CONFIG_BACKUP_PATH]) {
+    if (!files.fileExists(path)) continue;
+    try {
+      return JSON.parse(files.readString(path));
+    } catch (_) {
+      // Un file parziale non e' mai scelto: si prova la generazione precedente.
+    }
+  }
+  return null;
 }
 
 function saveConfigFile(state) {
   ensurePaths();
-  files.writeString(CONFIG_PATH, JSON.stringify(state, null, 2));
+  const serialized = JSON.stringify(state, null, 2);
+
+  // Fase 1: il nuovo stato viene scritto e verificato separatamente. Se
+  // Scriptable viene terminato qui, `loadConfigFile` recupera `.new`.
+  if (files.fileExists(CONFIG_TMP_PATH)) files.remove(CONFIG_TMP_PATH);
+  files.writeString(CONFIG_TMP_PATH, serialized);
+  JSON.parse(files.readString(CONFIG_TMP_PATH));
+
+  // Fase 2: conserva una generazione valida finche' quella nuova non e'
+  // diventata attiva. Scriptable espone `move` ma non una sostituzione atomica;
+  // il journal `.new`/`.bak` rende recuperabili entrambi gli intervalli.
+  if (files.fileExists(CONFIG_BACKUP_PATH)) files.remove(CONFIG_BACKUP_PATH);
+  if (files.fileExists(CONFIG_PATH)) files.move(CONFIG_PATH, CONFIG_BACKUP_PATH);
+  files.move(CONFIG_TMP_PATH, CONFIG_PATH);
 }
 
 function stateContactToJson(rec) {
@@ -1827,13 +1858,90 @@ async function screenContacts() {
   }
 }
 
+/**
+ * L'intestazione sopra un messaggio decifrato: chi l'ha scritto, e con quanta
+ * certezza.
+ *
+ * ## Perche' esiste
+ *
+ * Prima si mostrava **solo il testo**. La regola K6 era rispettata — un
+ * messaggio di gruppo non deve mai avere un autore accanto — ma per omissione:
+ * non mostrandolo per nessun messaggio.
+ *
+ * Cosi' pero' si buttava via una proprieta' vera. In un messaggio a due la
+ * decifratura riuscita **dimostra chi ha scritto**: solo chi possiede quella
+ * chiave privata poteva produrre quel segreto. Non dirlo significa che un
+ * messaggio di Marco e uno di uno sconosciuto che conosce la tua chiave
+ * pubblica si presentano identici — e l'unico segnale anti-MITM del sistema,
+ * il «confrontato di persona», non arrivava mai all'occhio di nessuno.
+ *
+ * E K6 non chiede solo di tacere l'autore: chiede di **dire** che e' un
+ * gruppo, quante persone potevano leggerlo, e che chi ha scritto non e'
+ * stabilibile. Anche quella meta' mancava.
+ */
+function intestazioneMittente(item) {
+  if (item.tag === "ownMessage") {
+    const a = item.recipientLabel || fingerprintOf(item.recipient);
+    return ["L'hai scritto tu", "a " + a];
+  }
+
+  if (item.gruppo) {
+    // Niente nome, per K6: il testo e' cifrato con una chiave che tutti i
+    // membri hanno, quindi qualunque membro puo' averlo riscritto tenendo gli
+    // slot originali. Un nome accanto a un testo riscrivibile e' peggio di
+    // nessun nome — e' una garanzia inventata.
+    //
+    // E si dice l'altra meta', quella che K1 condizione 2 impone: un gruppo
+    // NON ha forward secrecy, e prometterla tacendo sarebbe la bugia piu'
+    // comoda da raccontare qui.
+    return [
+      "Messaggio di gruppo",
+      "Potevano leggerlo in " + item.destinatari + ". Chi l'ha scritto non e' " +
+      "stabilibile: chiunque del gruppo puo' averlo riscritto.\n" +
+      "Un messaggio di gruppo non ha forward secrecy: resta apribile a chi " +
+      "ottenga la chiave di uno qualsiasi dei membri.",
+    ];
+  }
+
+  const s = item.senderStatus;
+  if (s.kind === "new") {
+    // Mittente mai visto: la chiave e' stata fissata adesso (TOFU), e questo
+    // e' l'unico momento in cui l'utente puo' accorgersene.
+    return [
+      "Mittente mai visto",
+      "La sua chiave e' stata memorizzata ora. Da Contatti puoi dargli un nome " +
+      "e confrontare l'impronta di persona:\n" + fingerprintOf(item.sender),
+    ];
+  }
+  const nome = s.label || fingerprintOf(item.sender);
+  return [
+    s.verified ? "Da " + nome + " — confrontato di persona" : "Da " + nome,
+    s.verified
+      ? ""
+      : "Non hai ancora confrontato la sua impronta di persona: da sola la " +
+        "memorizzazione non esclude che qualcuno si sia messo in mezzo al " +
+        "primo contatto.",
+  ];
+}
+
 async function showDecryptedResult(item) {
   if (item.tag === "message" || item.tag === "ownMessage") {
+    const [titolo, sottotitolo] = intestazioneMittente(item);
+    const quando = new Date(Number(item.sentAtUnix) * 1000).toLocaleString();
+    // La data si mostra e basta: e' autenticata ma non verificabile, e la
+    // decisione C vieta di prenderci decisioni automatiche. Serve a un umano
+    // per accorgersi di un messaggio ripubblicato.
     const html =
-      "<html><body style='font-family: -apple-system, sans-serif; font-size: 20px; " +
-      "padding: 24px; word-wrap: break-word; white-space: pre-wrap;'>" +
+      "<html><body style='font-family: -apple-system, sans-serif; " +
+      "padding: 24px; word-wrap: break-word;'>" +
+      "<div style='font-size: 15px; color: #666;'>" +
+      "<b>" + escapeHtml(titolo) + "</b>" +
+      (sottotitolo ? "<br>" + escapeHtml(sottotitolo).replace(/\n/g, "<br>") : "") +
+      "<br>Composto il " + escapeHtml(quando) +
+      "</div><hr style='border:none;border-top:1px solid #ddd;margin:16px 0;'>" +
+      "<div style='font-size: 20px; white-space: pre-wrap;'>" +
       escapeHtml(item.text) +
-      "</body></html>";
+      "</div></body></html>";
     const wv = new WebView();
     await wv.loadHTML(html);
     await wv.present(true);
