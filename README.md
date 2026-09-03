@@ -41,7 +41,10 @@ cargo build --release --target wasm32-unknown-unknown
 ```
 
 Il binario esce in `target/wasm32-unknown-unknown/release/musyboard_wasm.wasm`,
-~289 KB, con **zero import**: non chiede niente all'host, quindi
+e una copia pronta da trasferire sull'iPhone sta in `dist/` (vedi
+`dist/LEGGIMI.md`: e' una copia deliberata, non si aggiorna da sola).
+
+Pesa ~289 KB e ha **zero import**: non chiede niente all'host, quindi
 `WebAssembly.instantiate(bytes, {})` basta.
 
 ## La chiave privata sta in chiaro nel file, e va saputo

@@ -33,7 +33,8 @@ copia valida piu' recente se un salvataggio era stato interrotto.
   ```
   cargo build --release --target wasm32-unknown-unknown --manifest-path wasm/Cargo.toml
   ```
-  si trova poi in `wasm/target/wasm32-unknown-unknown/release/musyboard_wasm.wasm`
+  ma se non vuoi compilare niente c'e' gia' pronto in `dist/musyboard_wasm.wasm`
+  (compilandolo, esce in `target/wasm32-unknown-unknown/release/`)
   — copialo con **esattamente questo nome**, `MusyBoard.js` lo cerca per nome.
 
 Se il salvataggio da un'app di messaggistica non mostra subito la cartella
