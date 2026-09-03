@@ -54,6 +54,16 @@ pub fn code_of(e: &Error) -> u32 {
         Error::TierUnsupported => 7,
         Error::OwnMessage => 8,
         Error::Keyring => 9,
+        // Aggiunto dal core dopo che questo ponte era gia' uscito nel suo
+        // repo: un messaggio nostro il cui destinatario c'e' ancora, ma la
+        // chiave verso cui era cifrato e' stata sostituita o bruciata. E' un
+        // esito NORMALE come `OwnMessage`, non un guasto: cambia solo cosa si
+        // dice a chi legge.
+        //
+        // Il numero e' 10 e non 8: dire "puo' aprirlo solo il destinatario"
+        // quando la chiave non esiste piu' manderebbe a cercare la persona
+        // sbagliata — o a sospettare della rubrica, che non c'entra.
+        Error::OwnMessageKeyGone => 10,
     }
 }
 

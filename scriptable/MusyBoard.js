@@ -880,6 +880,7 @@ const ERROR_MESSAGES = {
   7: "livello di cifratura non supportato da questa versione dell'app",
   8: "questo messaggio l'hai scritto tu: può aprirlo solo il destinatario",
   9: "errore interno del portachiavi",
+  10: "l'hai scritto tu, e la chiave verso cui era cifrato non c'è più: non si riapre",
   90: "generatore casuale non pronto (bug interno)",
   92: "nessuna identità caricata: aprila prima da MusyBoard",
   93: "testo non valido",

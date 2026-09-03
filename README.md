@@ -32,6 +32,17 @@ scrivono senza sapere l'uno dell'altro.
 Non e' una copia del core: e' lo stesso codice, e una correzione crittografica
 fatta li' arriva qui ricompilando.
 
+**Il rovescio della medaglia, gia' successo una volta.** Il ponte Android vive
+nello stesso repo del core, quindi un cambiamento che lo riguarda lo aggiorna
+insieme. Questo no. Quando al core e' stata aggiunta una variante di `Error`,
+`jni/` e' stato adeguato nello stesso commit e qui e' rimasto un `match` non
+esaustivo — cioe' **questo crate ha smesso di compilare**, e nessuno se ne e'
+accorto finche' non lo si e' ricostruito.
+
+Non e' un difetto della separazione, e' il suo costo. Chi tocca `Error`,
+`format.rs` o le firme pubbliche del core deve ricostruire anche qui: il
+compilatore lo dice subito, ma solo a chi glielo chiede.
+
 ## Comandi
 
 ```
