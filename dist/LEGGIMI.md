@@ -12,8 +12,9 @@ Stava dentro `target/`, che e' in `.gitignore`: un `cargo clean` lo cancellava e
 un `cargo build` non lo aggiornava qui. Ora sta fuori, ed e' una copia
 deliberata — non si aggiorna da sola.
 
-**Dopo ogni modifica al crate va rifatta**, altrimenti quello che si trasferisce
-sull'iPhone non e' quello che dice il sorgente:
+**Dopo ogni modifica al crate — e a ogni modifica del core — va rifatta**,
+altrimenti quello che si trasferisce sull'iPhone non e' quello che dice il
+sorgente. `tastieraNoCC/verifica-tutto.sh` se ne accorge e si ferma; a mano:
 
     cargo build --release --target wasm32-unknown-unknown
     cp target/wasm32-unknown-unknown/release/musyboard_wasm.wasm dist/

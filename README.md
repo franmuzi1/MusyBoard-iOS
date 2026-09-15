@@ -43,6 +43,11 @@ Non e' un difetto della separazione, e' il suo costo. Chi tocca `Error`,
 `format.rs` o le firme pubbliche del core deve ricostruire anche qui: il
 compilatore lo dice subito, ma solo a chi glielo chiede.
 
+Per questo nel repo del core c'e' `verifica-tutto.sh`, che ricostruisce anche
+questo crate, esegue i test Rust e JS, controlla che il binario non abbia
+import e che `dist/` sia allineato. E' lo strumento che ha trovato il secondo
+guasto — `dist/` rimasto vecchio dopo un cambiamento del core — invece del caso.
+
 ## Comandi
 
 ```
